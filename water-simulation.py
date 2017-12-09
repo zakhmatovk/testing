@@ -1,8 +1,8 @@
 import numpy as np
 from vispy import gloo, app, io
 
-from surface import Surface
-from bed import BedLiner
+from surface import PlaneWaves, CircularWaves
+from bed import BedLiner, BedLog, BedCircular
 
 vertex = ("""
 #version 120
@@ -168,7 +168,6 @@ class Canvas(app.Canvas):
         self.program["u_sun_reflected_color"] = [1, 0.8, 0.6]
 
         self.triangles = gloo.IndexBuffer(self.surface.triangulation())
-        self.t = 0
 
         # Set up GUI
         self.camera = np.array([0, 0, 1])
@@ -226,9 +225,9 @@ class Canvas(app.Canvas):
         # Все пиксели устанавливаются в значение clear_color,
         gloo.clear()
         # Читаем положение высот для текущего времени
-        height = self.surface.height(self.t)
+        height, grad = self.surface.height_and_normal()
         self.program["a_height"] = height
-        self.program["a_normal"] = self.surface.normal(self.t)
+        self.program["a_normal"] = grad
         gloo.set_state(depth_test=True)
         self.program.draw('triangles', self.triangles)
         if self.are_points_visible:
@@ -237,7 +236,7 @@ class Canvas(app.Canvas):
             self.program_point.draw('points')
 
     def on_timer(self, event):
-        self.t += 0.01
+        self.surface.propagate(0.01)
         self.update()
 
     def on_resize(self, event):
@@ -292,5 +291,6 @@ class Canvas(app.Canvas):
         self.drag_start = None
 
 if __name__ == '__main__':
-    c = Canvas(Surface(), BedLiner())
+    # c = Canvas(CircularWaves(), BedLiner())
+    c = Canvas(PlaneWaves(), BedCircular())
     app.run()

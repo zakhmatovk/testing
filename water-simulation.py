@@ -4,9 +4,11 @@ from vispy import app
 
 # Обьект, генерирующий состояния водной глади.
 class Surface(object):
-    # Конструктор получает размер генерируемого массива.
-    # Также конструктор Генерируется параметры нескольких плоских волн.
     def __init__(self, size=(100,100), flat_wave_size=5):
+        """
+            Конструктор получает размер генерируемого массива.
+            Также конструктор Генерируется параметры нескольких плоских волн.
+        """
         self._size = size
         # randn - массив размера (n, m, ...), каждая точка нормальное распределение с центром в 0
         # rand - массив размера (n, m, ...), каждая точка равноемерное [0, 1]
@@ -15,10 +17,11 @@ class Surface(object):
         self._angular_frequency = np.random.randn(flat_wave_size)
         self._phase = 2 * np.pi * np.random.rand(flat_wave_size)
         self._amplitude = np.random.rand(flat_wave_size) / flat_wave_size
-    # Эта функция возвращает xy координаты точек.
-    # Точки образуют прямоугольную решетку в квадрате [0,1]x[0,1]
+
     def position(self):
         """
+            Эта функция возвращает xy координаты точек.
+            Точки образуют прямоугольную решетку в квадрате [0,1]x[0,1]
         array([[[-1., -1.],
             [-1.,  0.],
             [-1.,  1.]],
@@ -32,12 +35,15 @@ class Surface(object):
              [ 1.,  1.]]])
         """
         xy=np.empty(self._size + (2,), dtype=np.float32)
-        xy[:,:,0]=np.linspace(-1,1,self._size[0])[:,None]
-        xy[:,:,1]=np.linspace(-1,1,self._size[1])[None,:]
+        xy[:, :, 0]=np.linspace(-1, 1, self._size[0])[:, None]
+        xy[:, :, 1]=np.linspace(-1, 1, self._size[1])[None, :]
         return xy
-    # Эта функция возвращает массив высот водной глади в момент времени t.
-    # Диапазон изменения высоты от -1 до 1, значение 0 отвечает равновесному положению
+
     def height(self, t):
+        """
+            Эта функция возвращает массив высот водной глади в момент времени t.
+            Диапазон изменения высоты от -1 до 1, значение 0 отвечает равновесному положению
+        """
         x=np.linspace(-1, 1, self._size[0])[:, None]
         y=np.linspace(-1, 1, self._size[1])[None, :]
         z=np.zeros(self._size, dtype=np.float32)
@@ -49,6 +55,33 @@ class Surface(object):
                 + t * self._angular_frequency[n]
             )
         return z
+
+    def wireframe(self):
+        """
+            Возвращает массив пар ближайщих вершин.
+            Соединяя эти пары отрезками, получим изображение прямоугольной решетки.
+        """
+        # Возвращаем координаты всех вершин, кроме крайнего правого столбца
+        left = np.indices((self._size[0] - 1,self._size[1]))
+        # Пересчитываем в координаты всех точек, кроме крайнего левого столбца
+        right = left + np.array([1, 0])[:, None, None]
+        # Преобразуем массив точек в список (одномерный массив)
+        left_r = left.reshape((2, -1))
+        right_r = right.reshape((2, -1))
+        # Заменяем многомерные индексы линейными индексами
+        left_l = np.ravel_multi_index(left_r, self._size)
+        right_l = np.ravel_multi_index(right_r, self._size)
+        # собираем массив пар точек
+        horizontal = np.concatenate((left_l[..., None], right_l[..., None]), axis=-1)
+        # делаем то же самое для вертикальных отрезков
+        bottom = np.indices((self._size[0], self._size[1] - 1))
+        top = bottom + np.array([0, 1])[:, None, None]
+        bottom_r = bottom.reshape((2, -1))
+        top_r = top.reshape((2, -1))
+        bottom_l = np.ravel_multi_index(bottom_r, self._size)
+        top_l = np.ravel_multi_index(top_r, self._size)
+        vertical = np.concatenate((bottom_l[..., None], top_l[..., None]), axis=-1)
+        return np.concatenate((horizontal, vertical), axis=0).astype(np.uint32)
 
 vertex = ("""
 #version 120
@@ -90,9 +123,11 @@ class Canvas(app.Canvas):
         gloo.set_state(clear_color=(0,0,0,1), depth_test=False, blend=False)
         self.program = gloo.Program(vertex, fragment)
 
-        self.surface=Surface()
+        self.surface = Surface()
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
-        self.program["a_position"]=self.surface.position()
+        self.program["a_position"] = self.surface.position()
+         # Сохраним вершины, которые нужно соединить отрезками, в графическую память.
+        self.segments = gloo.IndexBuffer(self.surface.wireframe())
         # Устанавливаем начальное время симуляции
         self.t=0
         # Закускаем таймер, который будет вызывать метод on_timer для
@@ -117,7 +152,7 @@ class Canvas(app.Canvas):
         self.program["a_height"]=self.surface.height(self.t)
         # Запускаем шейдеры
         # Метод draw получает один аргумент, указывающий тип отрисовываемых элементов.
-        self.program.draw('points')
+        self.program.draw('lines', self.segments)
         # В результате видим анимированную картину "буйков"
         # качающихся на волнах.
 

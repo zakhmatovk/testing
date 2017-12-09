@@ -83,19 +83,45 @@ class Surface(object):
         vertical = np.concatenate((bottom_l[..., None], top_l[..., None]), axis=-1)
         return np.concatenate((horizontal, vertical), axis=0).astype(np.uint32)
 
+     # Возвращает массив индесов вершин треугольников.
+    def triangulation(self):
+        # Решетка состоит из прямоугольников с вершинами
+        # A (левая нижняя), B(правая нижняя), С(правая верхняя), D(левая верхняя).
+        # Посчитаем индексы всех точек A,B,C,D для каждого из прямоугольников.
+        a=np.indices((self._size[0]-1,self._size[1]-1))
+        b=a+np.array([1,0])[:,None,None]
+        c=a+np.array([1,1])[:,None,None]
+        d=a+np.array([0,1])[:,None,None]
+        # Преобразуем массив индексов в список (одномерный массив)
+        a_r=a.reshape((2,-1))
+        b_r=b.reshape((2,-1))
+        c_r=c.reshape((2,-1))
+        d_r=d.reshape((2,-1))
+        # Заменяем многомерные индексы линейными индексами
+        a_l=np.ravel_multi_index(a_r, self._size)
+        b_l=np.ravel_multi_index(b_r, self._size)
+        c_l=np.ravel_multi_index(c_r, self._size)
+        d_l=np.ravel_multi_index(d_r, self._size)
+        # Собираем массив индексов вершин треугольников ABC, ACD
+        abc=np.concatenate((a_l[...,None],b_l[...,None],c_l[...,None]),axis=-1)
+        acd=np.concatenate((a_l[...,None],c_l[...,None],d_l[...,None]),axis=-1)
+        # Обьединяем треугольники ABC и ACD для всех прямоугольников
+        return np.concatenate((abc,acd),axis=0).astype(np.uint32)
+
 vertex = ("""
 #version 120
 
 attribute vec2 a_position;
-
 attribute float a_height;
+varying float v_z;
 
 void main (void) {
 """
     # Отображаем диапазон высот [-1,1] в интервал [1,0],
 """
-    float z=(1-a_height)*0.5;
-    gl_Position = vec4(a_position.xy,z,z);
+    v_z = (1 - a_height) * 0.5;
+    gl_Position = vec4(a_position.xy, v_z , 1);
+
 """
     # После работы шейдера вершин OpenGL отбросит все точке,
     # с координатами, выпадающими из области -1<=x,y<=1, 0<=z<=1.
@@ -109,8 +135,11 @@ void main (void) {
 fragment = """
 #version 120
 
+varying float v_z;
+
 void main() {
-    gl_FragColor = vec4(0.5, 0.5, 1, 1);
+    vec3 rgb = mix(vec3(1, 0.5, 0), vec3(0, 0.5, 1.0), v_z);
+    gl_FragColor = vec4(rgb,1);
 }
 """
 
@@ -126,8 +155,9 @@ class Canvas(app.Canvas):
         self.surface = Surface()
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
         self.program["a_position"] = self.surface.position()
-         # Сохраним вершины, которые нужно соединить отрезками, в графическую память.
-        self.segments = gloo.IndexBuffer(self.surface.wireframe())
+         # Сохраним треугольники, которые нужно соединить отрезками, в графическую память.
+        self.triangles=gloo.IndexBuffer(self.surface.triangulation())
+        #self.segments = gloo.IndexBuffer(self.surface.wireframe())
         # Устанавливаем начальное время симуляции
         self.t=0
         # Закускаем таймер, который будет вызывать метод on_timer для
@@ -150,9 +180,10 @@ class Canvas(app.Canvas):
         gloo.clear()
         # Читаем положение высот для текущего времени
         self.program["a_height"]=self.surface.height(self.t)
-        # Запускаем шейдеры
-        # Метод draw получает один аргумент, указывающий тип отрисовываемых элементов.
-        self.program.draw('lines', self.segments)
+        # Теперь мы отрисовываем треугольники, поэтому аргумент "triangles",
+        # и теперь нужно передать индексы self.triangles вершин треугольников.
+        self.program.draw('triangles', self.triangles)
+        #self.program.draw('lines', self.segments)
         # В результате видим анимированную картину "буйков"
         # качающихся на волнах.
 

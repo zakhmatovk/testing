@@ -1,7 +1,7 @@
 import numpy as np
 
 class Surface(object):
-    def __init__(self, size=(100,100), flat_wave_size=10):
+    def __init__(self, size=(100,100), flat_wave_size=10, max_height=0.2):
         """
             Конструктор получает размер генерируемого массива.
             Также конструктор Генерируется параметры нескольких плоских волн.
@@ -13,7 +13,7 @@ class Surface(object):
         # Угловая частота
         self._angular_frequency = np.random.randn(flat_wave_size)
         self._phase = 2 * np.pi * np.random.rand(flat_wave_size)
-        self._amplitude = np.random.rand(flat_wave_size) / flat_wave_size
+        self._amplitude=max_height * (1 + np.random.rand(flat_wave_size)) / 2 / flat_wave_size
 
     def position(self):
         """

@@ -2,6 +2,7 @@ import numpy as np
 from vispy import gloo, app, io
 
 from surface import Surface
+from bed import BedLiner
 
 vertex = ("""
 #version 120
@@ -13,6 +14,7 @@ uniform float u_bed_depth;
 
 attribute vec2 a_position;
 attribute float a_height;
+attribute float a_bed_depth;
 attribute vec2 a_normal;
 
 varying vec3 v_normal;
@@ -44,7 +46,7 @@ void main (void) {
     vec3 refracted = normalize(u_alpha * cross(cr, normal) - normal * c2);
 
     float c1 =- dot(normal, from_eye);
-    float t = (-u_bed_depth - v_position.z) / refracted.z;
+    float t = (-a_bed_depth - u_bed_depth - v_position.z) / refracted.z;
     vec3 point_on_bed = v_position + t * refracted;
     v_bed_texcoord = point_on_bed.xy + vec2(0.5, 0.5);
 
@@ -92,7 +94,7 @@ void main (void) {
 
     vec3 ambient_water = vec3(0, 0.3, 0.5);
     vec3 image_color = u_bed_mult * bed_color * v_mask + u_depth_mult * ambient_water * (1 - v_mask);
-    vec3 rgb=u_sky_mult * sky_color * v_reflectance
+    vec3 rgb = u_sky_mult * sky_color * v_reflectance
         + image_color * (1 - v_reflectance)
         + diffused_intensity * u_sun_diffused_color
         + reflected_intensity * u_sun_reflected_color;
@@ -115,16 +117,17 @@ def normalize(vec):
 
 class Canvas(app.Canvas):
 
-    def __init__(self, sky_img_path="fluffy_clouds.png", bed_img_path="seabed.png"):
+    def __init__(self, surface, bed, sky_img_path="fluffy_clouds.png", bed_img_path="seabed.png"):
         app.Canvas.__init__(self, size=(1000, 1000),
                             title="Water surface simulator 2")
         # запрещаем текст глубины depth_test (все точки будут отрисовываться),
         # запрещает смещивание цветов blend - цвет пикселя на экране равен gl_fragColor.
-        gloo.set_state(clear_color=(0, 0, 0, 1), depth_test=True, blend=False)
+        gloo.set_state(clear_color=(0, 0, 0, 1), depth_test=True, blend=True)
         self.program = gloo.Program(vertex, fragment_triangle)
         self.program_point = gloo.Program(vertex, fragment_point)
 
-        self.surface = Surface()
+        self.surface = surface
+        self.bed = bed
         self.sky_img = io.read_png(sky_img_path)
         self.bed_img = io.read_png(bed_img_path)
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
@@ -139,7 +142,8 @@ class Canvas(app.Canvas):
         self.program_point["u_eye_height"] = self.program["u_eye_height"] = 3
 
         self.program["u_alpha"] = 0.5
-        self.program["u_bed_depth"] = 1
+        self.program["a_bed_depth"] = self.bed.depth()
+        self.program["u_bed_depth"] = 0.0
 
         self.program["u_sun_direction"] = normalize([0, 1, 0.1])
         self.program["u_sun_diffused_color"] = [1, 0.8, 1]
@@ -270,5 +274,5 @@ class Canvas(app.Canvas):
         self.drag_start = None
 
 if __name__ == '__main__':
-    c = Canvas()
+    c = Canvas(Surface(), BedLiner())
     app.run()

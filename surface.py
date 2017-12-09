@@ -75,14 +75,16 @@ class PlaneWaves(object):
 
 
 class CircularWaves(PlaneWaves):
-    def __init__(self, size=(100, 100), max_height=0.1, wave_length=0.3, center=(0., 0.), speed=3):
+    def __init__(self, size=(100, 100), max_height=0.02, wave_length=0.3, center=(0., 0.), speed=3):
         self._size = size
         self._amplitude = max_height
         self._omega = 2 * np.pi / wave_length
         self._center = np.asarray(center, dtype=np.float32)
         self._speed = speed
         self.t = 0
-        self._scale = 0.8
+        self._scale = 1.0
+        self._amplitude_shift = 0.00005
+        self._is_dead = False
 
     def height_and_normal(self):
         x = self._scale * np.linspace(-1, 1, self._size[0])[:, None]
@@ -99,3 +101,13 @@ class CircularWaves(PlaneWaves):
         grad[:, :, 0] += (x - self._center[0]) * dcos / d
         grad[:, :, 1] += (y - self._center[1]) * dcos / d
         return z, grad
+
+    def propagate(self, time_shift):
+        self.t += time_shift
+        if self._amplitude - self._amplitude_shift > 0:
+            self._amplitude = self._amplitude - self._amplitude_shift
+        else:
+            self._is_dead = True
+
+    def is_dead(self):
+        return self._is_dead

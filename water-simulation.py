@@ -109,8 +109,8 @@ void main (void) {
 
     vec3 ambient_water = vec3(0, 0.3, 0.5);
     vec3 image_color = u_bed_mult * bed_color * v_mask + u_depth_mult * ambient_water * (1 - v_mask);
-    vec3 rgb = u_sky_mult * sky_color * v_reflectance
-        + image_color * (1 - v_reflectance)
+    vec3 rgb = u_sky_mult * sky_color * v_reflectance * 2
+        + image_color * (1 - v_reflectance / 2)
         + diffused_intensity * u_sun_diffused_color
         + reflected_intensity * u_sun_reflected_color;
     if (bed_upper_water > 0.5) {
@@ -133,9 +133,8 @@ def normalize(vec):
     return vec / np.sqrt(np.sum(vec * vec, axis=-1))[..., None]
 
 class Canvas(app.Canvas):
-
-    def __init__(self, surface, bed, sky_img_path="fluffy_clouds.png", bed_img_path="seabed.png"):
-        app.Canvas.__init__(self, size=(1000, 1000),
+    def __init__(self, surface, bed, new_waves_class=None, size=(1000, 1000), sky_img_path="fluffy_clouds.png", bed_img_path="seabed.png"):
+        app.Canvas.__init__(self, size=size,
                             title="Water surface simulator 2")
         # запрещаем текст глубины depth_test (все точки будут отрисовываться),
         # запрещает смещивание цветов blend - цвет пикселя на экране равен gl_fragColor.
@@ -144,6 +143,10 @@ class Canvas(app.Canvas):
         self.program_point = gloo.Program(vertex, fragment_point)
 
         self.surface = surface
+        self.surface_class = new_waves_class
+        self.surface_wave_list = []
+        self.add_wave_center((self.size[0] / 2, self.size[1] / 2))
+
         self.bed = bed
         self.sky_img = io.read_png(sky_img_path)
         self.bed_img = io.read_png(bed_img_path)
@@ -159,7 +162,7 @@ class Canvas(app.Canvas):
 
         self.program_point["u_eye_height"] = self.program["u_eye_height"] = 3
 
-        self.program["u_alpha"] = 0.5
+        self.program["u_alpha"] = 0.3
         self.program["a_bed_depth"] = self.bed.depth()
         self.program["u_bed_depth"] = 0.0
 
@@ -221,11 +224,41 @@ class Canvas(app.Canvas):
         self.width, self.height = self.size
         gloo.set_viewport(0, 0, *self.physical_size)
 
+    def add_wave_center(self, center):
+        if self.surface_class is None:
+            return
+        pos_x = 1.5 * (center[0] - self.physical_size[0] / 2) / self.physical_size[0]
+        pos_y = 1.5 * (-(center[1] - self.physical_size[1] / 2) / self.physical_size[1])
+        self.surface_wave_list = [sf for sf in self.surface_wave_list if not sf.is_dead()]
+        self.surface_wave_list.append(self.surface_class(center=(pos_x, pos_y)))
+
+    def get_hieght_and_normal(self):
+        height_total = None
+        grad_total = None
+        sf_len = 0
+        for sf in self.surface_wave_list:
+            sf_len += 1
+            height, grad = sf.height_and_normal()
+            if height_total is None:
+                height_total = height
+            else:
+                height_total += height
+            if grad_total is None:
+                grad_total = grad
+            else:
+                grad_total += grad
+        if height_total is None:
+            avg_height, avg_grad = self.surface.height_and_normal()
+        else:
+            avg_height = height_total / sf_len
+            avg_grad = grad_total / sf_len
+        return avg_height, avg_grad
+
     def on_draw(self, event):
         # Все пиксели устанавливаются в значение clear_color,
         gloo.clear()
         # Читаем положение высот для текущего времени
-        height, grad = self.surface.height_and_normal()
+        height, grad = self.get_hieght_and_normal()
         self.program["a_height"] = height
         self.program["a_normal"] = grad
         gloo.set_state(depth_test=True)
@@ -237,6 +270,8 @@ class Canvas(app.Canvas):
 
     def on_timer(self, event):
         self.surface.propagate(0.01)
+        for sf in self.surface_wave_list:
+            sf.propagate(0.01)
         self.update()
 
     def on_resize(self, event):
@@ -278,6 +313,7 @@ class Canvas(app.Canvas):
 
     def on_mouse_press(self, event):
         self.drag_start = self.screen_to_gl_coordinates(event.pos)
+        self.add_wave_center(event.pos)
 
     def on_mouse_move(self, event):
         if not self.drag_start is None:
@@ -291,6 +327,8 @@ class Canvas(app.Canvas):
         self.drag_start = None
 
 if __name__ == '__main__':
+    c = Canvas(PlaneWaves(), BedLiner())
+    # c = Canvas(CircularWaves(), BedLiner(), new_waves_class=CircularWaves)
     # c = Canvas(CircularWaves(), BedLiner())
-    c = Canvas(PlaneWaves(), BedCircular())
+    # c = Canvas(PlaneWaves(), BedCircular())
     app.run()

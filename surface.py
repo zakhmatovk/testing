@@ -13,7 +13,8 @@ class Surface(object):
         # Угловая частота
         self._angular_frequency = np.random.randn(flat_wave_size)
         self._phase = 2 * np.pi * np.random.rand(flat_wave_size)
-        self._amplitude=max_height * (1 + np.random.rand(flat_wave_size)) / 2 / flat_wave_size
+        self._amplitude = max_height * (1 + np.random.rand(flat_wave_size)) / 2 / flat_wave_size
+        self._scale = 1.5
 
     def position(self):
         """
@@ -34,15 +35,15 @@ class Surface(object):
         xy=np.empty(self._size + (2,), dtype=np.float32)
         xy[:, :, 0]=np.linspace(-1, 1, self._size[0])[:, None]
         xy[:, :, 1]=np.linspace(-1, 1, self._size[1])[None, :]
-        return xy
+        return self._scale * xy
 
     def height(self, t):
         """
             Эта функция возвращает массив высот водной глади в момент времени t.
             Диапазон изменения высоты от -1 до 1, значение 0 отвечает равновесному положению
         """
-        x = np.linspace(-1, 1, self._size[0])[:, None]
-        y = np.linspace(-1, 1, self._size[1])[None, :]
+        x = self._scale * np.linspace(-1, 1, self._size[0])[:, None]
+        y = self._scale * np.linspace(-1, 1, self._size[1])[None, :]
         z = np.zeros(self._size, dtype=np.float32)
         for n in range(self._amplitude.shape[0]):
             z[:,:] += self._amplitude[n] * np.cos(

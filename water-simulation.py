@@ -13,6 +13,7 @@ uniform float u_alpha;
 uniform float u_bed_depth;
 
 attribute vec2 a_position;
+attribute vec2 a_start_position;
 attribute float a_height;
 attribute float a_bed_depth;
 attribute vec2 a_normal;
@@ -24,12 +25,15 @@ varying vec2 v_sky_texcoord;
 varying vec2 v_bed_texcoord;
 varying float v_reflectance;
 varying vec3 v_mask;
+varying float bed_upper_water;
 
 void main (void) {
     v_normal = normalize(vec3(a_normal, -1));
     v_position = vec3(a_position.xy, a_height);
 
     float z = 1 - (1 + a_height) / (1 + u_eye_height);
+    float total_depth = -a_bed_depth - u_bed_depth;
+    float z_depth = 1 - (1 + total_depth) / (1 + u_eye_height);
 
     gl_Position = vec4(a_position.xy / 2, a_height * z, z);
 
@@ -46,8 +50,15 @@ void main (void) {
     vec3 refracted = normalize(u_alpha * cross(cr, normal) - normal * c2);
 
     float c1 =- dot(normal, from_eye);
-    float t = (-a_bed_depth - u_bed_depth - v_position.z) / refracted.z;
+    float t = (total_depth - v_position.z) / refracted.z;
     vec3 point_on_bed = v_position + t * refracted;
+    if (total_depth > a_height) {
+        point_on_bed = v_position;
+        gl_Position = vec4(a_start_position.xy / 2, total_depth * z_depth, z_depth);
+        bed_upper_water = 1;
+    } else {
+        bed_upper_water = 0;
+    }
     v_bed_texcoord = point_on_bed.xy + vec2(0.5, 0.5);
 
     float reflectance_s = pow((u_alpha * c1 - c2) / (u_alpha * c1 + c2), 2);
@@ -81,6 +92,7 @@ varying vec2 v_sky_texcoord;
 varying vec2 v_bed_texcoord;
 varying float v_reflectance;
 varying vec3 v_mask;
+varying float bed_upper_water;
 
 void main (void) {
 
@@ -98,7 +110,9 @@ void main (void) {
         + image_color * (1 - v_reflectance)
         + diffused_intensity * u_sun_diffused_color
         + reflected_intensity * u_sun_reflected_color;
-
+    if (bed_upper_water > 0.5) {
+        rgb = bed_color;
+    }
     gl_FragColor = vec4(rgb, 1.0);
 }
 """)
@@ -132,6 +146,7 @@ class Canvas(app.Canvas):
         self.bed_img = io.read_png(bed_img_path)
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
         self.program["a_position"] = self.surface.position()
+        self.program["a_start_position"] = self.surface.position()
         self.program_point["a_position"] = self.surface.position()
 
         self.program['u_sky_texture'] = gloo.Texture2D(

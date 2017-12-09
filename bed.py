@@ -16,8 +16,10 @@ class BedLiner(object):
             Эта функция возвращает массив высот водной глади в момент времени t.
             Диапазон изменения высоты от -1 до 1, значение 0 отвечает равновесному положению
         """
-        x = np.linspace(self._min_depth, self._max_depth, self._size[0])[:, None]
-        y = np.linspace(self._min_depth, self._max_depth, self._size[1])[None, :]
+        x = np.linspace(self._min_depth, self._max_depth,
+                        self._size[0])[:, None]
+        y = np.linspace(self._min_depth, self._max_depth,
+                        self._size[1])[None, :]
         d = np.zeros(self._size, dtype=np.float32)
         d[:, :] = x * y
         return d

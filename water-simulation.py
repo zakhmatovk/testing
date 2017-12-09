@@ -105,12 +105,12 @@ void main (void) {
     vec3 normal = normalize(v_normal);
     float diffused_intensity = u_diffused_mult * max(0, -dot(normal, u_sun_direction));
     float cosphi = max(0, dot(u_sun_direction, normalize(v_reflected)));
-    float reflected_intensity = u_reflected_mult * pow(cosphi, 100);
+    float reflected_intensity = u_reflected_mult * pow(cosphi, 20);
 
     vec3 ambient_water = vec3(0, 0.3, 0.5);
     vec3 image_color = u_bed_mult * bed_color * v_mask + u_depth_mult * ambient_water * (1 - v_mask);
-    vec3 rgb = u_sky_mult * sky_color * v_reflectance * 2
-        + image_color * (1 - v_reflectance / 2)
+    vec3 rgb = u_sky_mult * sky_color * v_reflectance
+        + image_color * (1 - v_reflectance)
         + diffused_intensity * u_sun_diffused_color
         + reflected_intensity * u_sun_reflected_color;
     if (bed_upper_water > 0.5) {

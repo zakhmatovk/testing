@@ -2,7 +2,7 @@ import numpy as np
 
 
 class BedLiner(object):
-    def __init__(self, size=(100, 100), max_depth=2.0, min_depth = 0.5):
+    def __init__(self, size=(100, 100), max_depth=1.0, min_depth = 0.5):
         """
             Конструктор получает размер генерируемого массива.
             Также конструктор Генерируется параметры нескольких плоских волн.

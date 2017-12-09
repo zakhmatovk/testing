@@ -14,7 +14,7 @@ class Surface(object):
         self._angular_frequency = np.random.randn(flat_wave_size)
         self._phase = 2 * np.pi * np.random.rand(flat_wave_size)
         self._amplitude = max_height * (1 + np.random.rand(flat_wave_size)) / 2 / flat_wave_size
-        self._scale = 1.5
+        self._scale = 0.8
 
     def position(self):
         """

@@ -31,11 +31,14 @@ void main (void) {
     v_normal = normalize(vec3(a_normal, -1));
     v_position = vec3(a_position.xy, a_height);
 
-    float z = 1 - (1 + a_height) / (1 + u_eye_height);
     float total_depth = -a_bed_depth - u_bed_depth;
-    float z_depth = 1 - (1 + total_depth) / (1 + u_eye_height);
 
-    gl_Position = vec4(a_position.xy / 2, a_height * z, z);
+    vec4 position_view = u_world_view * vec4(v_position, 1);
+    float z = 1 - (1 + position_view.z) / (1 + u_eye_height);
+    gl_Position = vec4(position_view.xy, -position_view.z*z, z);
+
+    vec4 depth_position_view = u_world_view * vec4(a_start_position.xy, total_depth, 1);
+    float z_depth = 1 - (1 + depth_position_view.z) / (1 + u_eye_height);
 
     vec4 eye_view = vec4(0, 0, u_eye_height, 1);
     vec4 eye = transpose(u_world_view) * eye_view;
@@ -54,7 +57,7 @@ void main (void) {
     vec3 point_on_bed = v_position + t * refracted;
     if (total_depth > a_height) {
         point_on_bed = v_position;
-        gl_Position = vec4(a_start_position.xy / 2, total_depth * z_depth, z_depth);
+        gl_Position = vec4(depth_position_view.xy, -position_view.z * z_depth, z_depth);
         bed_upper_water = 1;
     } else {
         bed_upper_water = 0;

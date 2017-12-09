@@ -44,9 +44,9 @@ class Surface(object):
             Эта функция возвращает массив высот водной глади в момент времени t.
             Диапазон изменения высоты от -1 до 1, значение 0 отвечает равновесному положению
         """
-        x=np.linspace(-1, 1, self._size[0])[:, None]
-        y=np.linspace(-1, 1, self._size[1])[None, :]
-        z=np.zeros(self._size, dtype=np.float32)
+        x = np.linspace(-1, 1, self._size[0])[:, None]
+        y = np.linspace(-1, 1, self._size[1])[None, :]
+        z = np.zeros(self._size, dtype=np.float32)
         for n in range(self._amplitude.shape[0]):
             z[:,:] += self._amplitude[n] * np.cos(
                 self._phase[n]
@@ -56,90 +56,101 @@ class Surface(object):
             )
         return z
 
-    def wireframe(self):
-        """
-            Возвращает массив пар ближайщих вершин.
-            Соединяя эти пары отрезками, получим изображение прямоугольной решетки.
-        """
-        # Возвращаем координаты всех вершин, кроме крайнего правого столбца
-        left = np.indices((self._size[0] - 1,self._size[1]))
-        # Пересчитываем в координаты всех точек, кроме крайнего левого столбца
-        right = left + np.array([1, 0])[:, None, None]
-        # Преобразуем массив точек в список (одномерный массив)
-        left_r = left.reshape((2, -1))
-        right_r = right.reshape((2, -1))
-        # Заменяем многомерные индексы линейными индексами
-        left_l = np.ravel_multi_index(left_r, self._size)
-        right_l = np.ravel_multi_index(right_r, self._size)
-        # собираем массив пар точек
-        horizontal = np.concatenate((left_l[..., None], right_l[..., None]), axis=-1)
-        # делаем то же самое для вертикальных отрезков
-        bottom = np.indices((self._size[0], self._size[1] - 1))
-        top = bottom + np.array([0, 1])[:, None, None]
-        bottom_r = bottom.reshape((2, -1))
-        top_r = top.reshape((2, -1))
-        bottom_l = np.ravel_multi_index(bottom_r, self._size)
-        top_l = np.ravel_multi_index(top_r, self._size)
-        vertical = np.concatenate((bottom_l[..., None], top_l[..., None]), axis=-1)
-        return np.concatenate((horizontal, vertical), axis=0).astype(np.uint32)
+    def normal(self, t):
+        x = np.linspace(-1, 1, self._size[0])[:, None]
+        y = np.linspace(-1, 1, self._size[1])[None, :]
+        grad = np.zeros(self._size + (2,), dtype=np.float32)
+        for n in range(self._amplitude.shape[0]):
+            dcos = -self._amplitude[n] * np.sin(
+                self._phase[n]
+                + x * self._wave_vector[n, 0]
+                + y * self._wave_vector[n, 1]
+                + t * self._angular_frequency[n])
+            grad[:, :, 0] += self._wave_vector[n, 0] * dcos
+            grad[:, :, 1] += self._wave_vector[n, 1] * dcos
+        return grad
 
      # Возвращает массив индесов вершин треугольников.
     def triangulation(self):
         # Решетка состоит из прямоугольников с вершинами
         # A (левая нижняя), B(правая нижняя), С(правая верхняя), D(левая верхняя).
         # Посчитаем индексы всех точек A,B,C,D для каждого из прямоугольников.
-        a=np.indices((self._size[0]-1,self._size[1]-1))
-        b=a+np.array([1,0])[:,None,None]
-        c=a+np.array([1,1])[:,None,None]
-        d=a+np.array([0,1])[:,None,None]
+        a = np.indices((self._size[0] - 1, self._size[1] - 1))
+        b = a + np.array([1, 0])[:, None, None]
+        c = a + np.array([1, 1])[:, None, None]
+        d = a + np.array([0, 1])[:, None, None]
         # Преобразуем массив индексов в список (одномерный массив)
-        a_r=a.reshape((2,-1))
-        b_r=b.reshape((2,-1))
-        c_r=c.reshape((2,-1))
-        d_r=d.reshape((2,-1))
+        a_r = a.reshape((2, -1))
+        b_r = b.reshape((2, -1))
+        c_r = c.reshape((2, -1))
+        d_r = d.reshape((2, -1))
         # Заменяем многомерные индексы линейными индексами
-        a_l=np.ravel_multi_index(a_r, self._size)
-        b_l=np.ravel_multi_index(b_r, self._size)
-        c_l=np.ravel_multi_index(c_r, self._size)
-        d_l=np.ravel_multi_index(d_r, self._size)
+        a_l = np.ravel_multi_index(a_r, self._size)
+        b_l = np.ravel_multi_index(b_r, self._size)
+        c_l = np.ravel_multi_index(c_r, self._size)
+        d_l = np.ravel_multi_index(d_r, self._size)
         # Собираем массив индексов вершин треугольников ABC, ACD
-        abc=np.concatenate((a_l[...,None],b_l[...,None],c_l[...,None]),axis=-1)
-        acd=np.concatenate((a_l[...,None],c_l[...,None],d_l[...,None]),axis=-1)
+        abc = np.concatenate((a_l[..., None], b_l[..., None],c_l [...,None]), axis=-1)
+        acd = np.concatenate((a_l[..., None], c_l[..., None],d_l [...,None]), axis=-1)
         # Обьединяем треугольники ABC и ACD для всех прямоугольников
-        return np.concatenate((abc,acd),axis=0).astype(np.uint32)
+        return np.concatenate((abc, acd), axis=0).astype(np.uint32)
 
 vertex = ("""
 #version 120
 
 attribute vec2 a_position;
 attribute float a_height;
-varying float v_z;
+attribute vec2 a_normal;
+
+varying vec3 v_normal;
+varying vec3 v_position;
 
 void main (void) {
-"""
-    # Отображаем диапазон высот [-1,1] в интервал [1,0],
-"""
-    v_z = (1 - a_height) * 0.5;
-    gl_Position = vec4(a_position.xy, v_z , 1);
+    v_normal = normalize(vec3(a_normal, -1));
+    v_position = vec3(a_position.xy, a_height);
 
-"""
-    # После работы шейдера вершин OpenGL отбросит все точке,
-    # с координатами, выпадающими из области -1<=x,y<=1, 0<=z<=1.
-    # Затем x и y координаты будут поделены на
-    # координату t (последняя в gl_Position),
-    # что создает перспективу: предметы ближе кажутся больше.
-"""
+    float z = (1 - a_height) * 0.5;
+
+    gl_Position = vec4(a_position.xy / 2, a_height * z, z);
 }
 """)
 
-fragment = """
+fragment_triangle = ("""
 #version 120
 
-varying float v_z;
+uniform vec3 u_sun_direction;
+uniform vec3 u_sun_color;
+uniform vec3 u_ambient_color;
+
+varying vec3 v_normal;
+varying vec3 v_position;
+
+void main (void) {
+"""
+    # Вычисляем яркость отраженного света, предполагая, что
+    # камера находится в точке eye.
+"""
+    vec3 eye = vec3(0, 0, 1);
+    vec3 to_eye = normalize(v_position - eye);
+"""
+    # Сначала считаем направляющий вектор отраженного от поверхности
+    # испущенного из камеры луча.
+"""
+    vec3 reflected = normalize(to_eye - 2 * v_normal * dot(v_normal, to_eye) / dot(v_normal, v_normal));
+"""
+    # Яркость блико от Солнца.
+"""
+    float directed_light = pow(max(0, -dot(u_sun_direction, reflected)), 16);
+    vec3 rgb = clamp(u_sun_color * directed_light + u_ambient_color, 0.0, 1.0);
+    gl_FragColor = vec4(rgb, 1);
+}
+""")
+
+fragment_point = """
+#version 120
 
 void main() {
-    vec3 rgb = mix(vec3(1, 0.5, 0), vec3(0, 0.5, 1.0), v_z);
-    gl_FragColor = vec4(rgb,1);
+    gl_FragColor = vec4(1, 0, 0, 1);
 }
 """
 
@@ -149,22 +160,34 @@ class Canvas(app.Canvas):
         app.Canvas.__init__(self, size=(600, 600), title="Water surface simulator 2")
         # запрещаем текст глубины depth_test (все точки будут отрисовываться),
         # запрещает смещивание цветов blend - цвет пикселя на экране равен gl_fragColor.
-        gloo.set_state(clear_color=(0,0,0,1), depth_test=False, blend=False)
-        self.program = gloo.Program(vertex, fragment)
+        gloo.set_state(clear_color=(0,0,0,1), depth_test=True, blend=False)
+        self.program = gloo.Program(vertex, fragment_triangle)
+        self.program_point = gloo.Program(vertex, fragment_point)
 
         self.surface = Surface()
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
         self.program["a_position"] = self.surface.position()
+        self.program_point["a_position"] = self.surface.position()
+        self.program["u_sun_color"] = np.array([0.8, 0.8, 0], dtype=np.float32)
+        self.program["u_ambient_color"] = np.array([0.1, 0.1, 0.5], dtype=np.float32)
          # Сохраним треугольники, которые нужно соединить отрезками, в графическую память.
-        self.triangles=gloo.IndexBuffer(self.surface.triangulation())
+        self.triangles = gloo.IndexBuffer(self.surface.triangulation())
         #self.segments = gloo.IndexBuffer(self.surface.wireframe())
         # Устанавливаем начальное время симуляции
-        self.t=0
+        self.t = 0
+        self.set_sun_direction()
+        self.are_points_visible = False
         # Закускаем таймер, который будет вызывать метод on_timer для
         # приращения времени симуляции
         self._timer = app.Timer('auto', connect=self.on_timer, start=True)
         self.activate_zoom()
         self.show()
+
+    def set_sun_direction(self):
+        phi = np.pi * (1 + self.t * 0.1);
+        sun = np.array([np.sin(phi), np.cos(phi), -0.5], dtype=np.float32)
+        sun /= np.linalg.norm(sun)
+        self.program["u_sun_direction"] = sun
 
     def activate_zoom(self):
         """
@@ -179,13 +202,15 @@ class Canvas(app.Canvas):
         # Все пиксели устанавливаются в значение clear_color,
         gloo.clear()
         # Читаем положение высот для текущего времени
-        self.program["a_height"]=self.surface.height(self.t)
-        # Теперь мы отрисовываем треугольники, поэтому аргумент "triangles",
-        # и теперь нужно передать индексы self.triangles вершин треугольников.
+        height = self.surface.height(self.t)
+        self.program["a_height"] = height
+        self.program["a_normal"] = self.surface.normal(self.t)
+        #gloo.set_state(depth_test=True)
         self.program.draw('triangles', self.triangles)
-        #self.program.draw('lines', self.segments)
-        # В результате видим анимированную картину "буйков"
-        # качающихся на волнах.
+        if self.are_points_visible:
+            self.program_point["a_height"] = height
+            gloo.set_state(depth_test=False)
+            self.program_point.draw('points')
 
     # Метод, вызываемый таймером.
     # Используем для создания анимации.
@@ -201,6 +226,12 @@ class Canvas(app.Canvas):
     # в противном случае OpenGL будет рисовать только на части окна.
     def on_resize(self, event):
         self.activate_zoom()
+
+    def on_key_press(self, event):
+        if event.key == 'Escape':
+            self.close()
+        elif event.key == ' ':
+            self.are_points_visible = not self.are_points_visible
 
 if __name__ == '__main__':
     c = Canvas()

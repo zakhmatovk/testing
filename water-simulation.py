@@ -1,6 +1,5 @@
 import numpy as np
-from vispy import gloo
-from vispy import app
+from vispy import gloo, app, io
 
 from surface import Surface
 
@@ -30,6 +29,7 @@ fragment_triangle = ("""
 uniform vec3 u_sun_direction;
 uniform vec3 u_sun_color;
 uniform vec3 u_ambient_color;
+uniform sampler2D u_sky_texture;
 
 varying vec3 v_normal;
 varying vec3 v_position;
@@ -46,12 +46,13 @@ void main (void) {
     # испущенного из камеры луча.
 """
     vec3 reflected = normalize(to_eye - 2 * v_normal * dot(v_normal, to_eye) / dot(v_normal, v_normal));
-"""
-    # Яркость блико от Солнца.
-"""
+
+    vec2 texture_coordinate = 0.25 * reflected.xy / reflected.z + (0.5, 0.5);
+    vec3 sky_color = texture2D(u_sky_texture, texture_coordinate).rgb;
     float directed_light = pow(max(0, -dot(u_sun_direction, reflected)), 16);
-    vec3 rgb = clamp(u_sun_color * directed_light + u_ambient_color, 0.0, 1.0);
-    gl_FragColor = vec4(rgb, 1);
+    vec3 rgb = clamp(u_sun_color * directed_light + sky_color, 0.0, 1.0);
+
+    gl_FragColor = vec4(rgb, 1.0);
 }
 """)
 
@@ -65,7 +66,7 @@ void main() {
 
 class Canvas(app.Canvas):
 
-    def __init__(self):
+    def __init__(self, sky_img_path="fluffy_clouds.png"):
         app.Canvas.__init__(self, size=(600, 600), title="Water surface simulator 2")
         # запрещаем текст глубины depth_test (все точки будут отрисовываться),
         # запрещает смещивание цветов blend - цвет пикселя на экране равен gl_fragColor.
@@ -74,8 +75,10 @@ class Canvas(app.Canvas):
         self.program_point = gloo.Program(vertex, fragment_point)
 
         self.surface = Surface()
+        self.sky_img = io.read_png(sky_img_path)
         # xy координаты точек сразу передаем шейдеру, они не будут изменятся со временем
         self.program["a_position"] = self.surface.position()
+        self.program['u_sky_texture'] = gloo.Texture2D(self.sky_img, wrapping='repeat', interpolation='linear')
         self.program_point["a_position"] = self.surface.position()
         self.program["u_sun_color"] = np.array([0.8, 0.8, 0], dtype=np.float32)
         self.program["u_ambient_color"] = np.array([0.1, 0.1, 0.5], dtype=np.float32)
@@ -126,6 +129,7 @@ class Canvas(app.Canvas):
     def on_timer(self, event):
         # Делаем приращение времени
         self.t+=0.01
+        self.set_sun_direction()
         # Сообщаем OpenGL, что нужно обновить изображение,
         # в результате будет вызвано on_draw.
         self.update()

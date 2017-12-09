@@ -1,7 +1,7 @@
 import numpy as np
 
 class Surface(object):
-    def __init__(self, size=(100,100), flat_wave_size=5):
+    def __init__(self, size=(100,100), flat_wave_size=10):
         """
             Конструктор получает размер генерируемого массива.
             Также конструктор Генерируется параметры нескольких плоских волн.
